@@ -1,0 +1,72 @@
+---
+- name: 'Install haproxy'
+  hosts: all
+  become: true
+
+  tasks:
+  
+    - name: Install prerequisites
+      apt:
+        name: ['apt-transport-https', 'ca-certificates', 'curl', 'gnupg2', 'software-properties-common']
+        update_cache: yes
+      
+    - name: Install HAProxy
+      block:
+        - name: Install haproxy
+          apt:
+            name: haproxy
+            update_cache: yes  
+
+        - name: cert file
+          copy:
+            src: "files/cert.pem"
+            dest: "/etc/haproxy/"
+            owner: root
+            group: root
+            mode: '0644'   
+            
+        - name: config file
+          copy:
+            src: "files/haproxy.cfg"
+            dest: "/etc/haproxy/"
+            owner: root
+            group: root
+            mode: '0644'             
+          notify:
+            - restart haproxy  
+      when: ansible_hostname == 'haproxy'
+
+    
+    - name: install web servers
+      block:
+        - name: Install apache2 + php
+          apt:
+            name: "{{ item }}"
+            update_cache: yes 
+            state: present
+          loop:
+            - apache2
+            - php           
+
+        - name: index file
+          copy:
+            src: "files/index.php"
+            dest: "/var/www/html/"
+            owner: www-data
+            group: www-data
+            mode: '0644'   
+            
+        - name: Remove index file
+          file:
+            path: /var/www/html/index.html
+            state: absent            
+
+      when: ansible_hostname != 'haproxy'
+
+
+  handlers:
+    - name: restart haproxy
+      systemd:
+        name: haproxy
+        state: restarted
+        enabled: true     
